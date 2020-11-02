@@ -1,96 +1,82 @@
-import React, { Component, Fragment } from 'react';
-import Link from 'next/link'
-import AudioClips from '../components/AudioClips'
+import React, { Component, Fragment } from 'react'
+import Layout from '../components/Layout'
+import ChannelGrid from '../components/ChannelGrid'
+import PodcastList from '../components/PodcastList'
+import Error from 'next/error'
 
-export default class extends Component {
+export default class extends React.Component {
 
-    static async getInitialProps({query}) {
-        
-        let idChannel = query.id;
+  static async getInitialProps({ query, res }) {
+    let idChannel = query.id
 
-        let [rChannel, rClips, rChildsChannels] = await Promise.all([
-            fetch (`https://api.audioboom.com/channels/${idChannel}`),
-            fetch (`https://api.audioboom.com/channels/${idChannel}/audio_clips`),
-            fetch (`https://api.audioboom.com/channels/${idChannel}/child_channels`)
-        ])
+    try {
+      let [reqChannel, reqSeries, reqAudios] = await Promise.all([
+        fetch(`https://api.audioboom.com/channels/${idChannel}`),
+        fetch(`https://api.audioboom.com/channels/${idChannel}/child_channels`),
+        fetch(`https://api.audioboom.com/channels/${idChannel}/audio_clips`)
+      ])
 
-        let dataChannel= await rChannel.json()
-        let channel = dataChannel.body.channel
-
-        let dataClips= await rClips.json()
-        let audioClips = dataClips.body.audio_clips
-
-        let dataChilds= await rChildsChannels.json()
-        let childChannels = dataChilds.body.channels
-        
-        
-        return { channel , audioClips, childChannels }
+      if( reqChannel.status >= 400 ) {
+        res.statusCode = reqChannel.status
+        return { channel: null, audioClips: null, series: null, statusCode: reqChannel.status }
       }
 
-    render() {
-        const {channel, audioClips, childChannels} = this.props
+      let dataChannel = await reqChannel.json()
+      let channel = dataChannel.body.channel
 
-        return  (  <>   
+      let dataAudios = await reqAudios.json()
+      let audioClips = dataAudios.body.audio_clips
 
-                <Head>
-                    <title>asjkdasd</title>
-                    <meta name="viewport" content="width=device-width, initial-scale=1"></meta>
-                </Head>
+      let dataSeries = await reqSeries.json()
+      let series = dataSeries.body.channels
 
-                <header>Podcasts</header>
-                <h1>{channel.title}</h1>
+      return { channel, audioClips, series, statusCode: 200 }
+    } catch(e) {
+      return { channel: null, audioClips: null, series: null, statusCode: 503 }
+    }
+  }
 
-               <AudioClips audioClips= {audioClips}></AudioClips>
-               
-                <div className="audioClips">
-                    
-                    <h3>audioClips</h3>
+  render() {
+    const { channel, audioClips, series, statusCode } = this.props
 
-                    {childChannels.map((channel) => (
-                        <p className="title"> { channel.title }</p>
-                    ))}
-                </div>
-             
-
-                <style jsx>{`
-                    header {
-                    color: #fff;
-                    background: #8756ca;
-                    padding: 15px;
-                    text-align: center;
-                    }
-
-                   
-
-                    .channel {
-                    display: block;
-                    border-radius: 3px;
-                    box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.15);
-                    margin-bottom: 0.5em;
-                    }
-
-                    .channel img {
-                    width: 100%;
-                    }
-
-                    .channel h2 {
-                    padding: 5px;
-                    font-size: 0.9em;
-                    font-weight: 600;
-                    margin: 0;
-                    text-align: center;
-                    }
-                `}</style>
-
-                <style jsx global>{`
-                    body {
-                    margin: 0;
-                    background: white;
-                    font-family: system-ui;
-                    }
-                `}</style>
-        </>)
+    if( statusCode !== 200 ) {
+      return <Error statusCode={ statusCode } />
     }
 
+    return <Layout title={channel.title}>
+      <div className="banner" style={{ backgroundImage: `url(${channel.urls.banner_image.original})` }} />
+      
+      <h1>{ channel.title }</h1>
 
+      { series.length > 0 &&
+        <div>
+          <h2>Series</h2>
+          <ChannelGrid channels={ series } />
+        </div>
+      }
+
+      <h2>Ultimos Podcasts</h2>
+      <PodcastList podcasts={ audioClips } />
+
+      <style jsx>{`
+        .banner {
+          width: 100%;
+          padding-bottom: 25%;
+          background-position: 50% 50%;
+          background-size: cover;
+          background-color: #aaa;
+        }
+        h1 {
+          font-weight: 600;
+          padding: 15px;
+        }
+        h2 {
+          padding: 15px;
+          font-size: 1.2em;
+          font-weight: 600;
+          margin: 0;
+        }
+      `}</style>
+    </Layout>
+  }
 }
